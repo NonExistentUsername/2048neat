@@ -4,6 +4,9 @@ version = "0.1.0"
 description = ""
 authors = ["Dmytro Maior <mayor4090Gmail.com>"]
 readme = "README.md"
+packages = [
+    { include = "*", from = "neat2048" },
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"
