@@ -1,3 +1,4 @@
+import itertools
 import random
 from copy import deepcopy
 
@@ -28,6 +29,16 @@ class Game2048:
     @property
     def board(self) -> list[list[int]]:
         return deepcopy(self.__board)
+
+    def __hash__(self) -> int:
+        p = 1
+        k = 31
+        mod = 10**9 + 7
+        result = 0
+        for x, y in itertools.product(range(self.__size_x), range(self.__size_y)):
+            result = (result + self.__board[x][y] * p) % mod
+            p *= k
+        return result
 
     def __check_if_move_legal(self, move) -> bool:
         board = deepcopy(self.__board)
@@ -208,7 +219,7 @@ class Game2048:
         if move not in MOVES:
             raise ValueError("Invalid move")
 
-        board_copy = deepcopy(self.__board)
+        board_copy = hash(self)
 
         if move == UP:
             self.__move_up()
@@ -219,7 +230,7 @@ class Game2048:
         elif move == LEFT:
             self.__move_left()
 
-        if board_copy != self.__board:
+        if board_copy != hash(self):
             if add_random_tile:
                 self.add_random_tile()
             return True
