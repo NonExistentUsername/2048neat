@@ -1,3 +1,4 @@
+import itertools
 import random
 from math import log2
 from typing import Callable
@@ -9,7 +10,7 @@ from neat2048.game import Game2048
 INFINITY = 10000000000000000000
 
 ### START SETTINGS ###
-GAMES_COUNT = 10
+GAMES_COUNT = 5
 COUNT_OF_MINIMAL_SCORES_AS_FITNESS = 5
 
 BOARD_SIZE_X = 4
@@ -89,6 +90,49 @@ def get_max_possible_tile(
     return 2 ** (board_size_x * board_size_y)
 
 
+def process_long_falling_from_tile(game: Game2048, x: int, y: int) -> int:
+    # Min value is 2, max is 4*4 = 16
+
+    best_neighbour_positions = []
+    best_neighbour_value = -1
+
+    is_valid = lambda x, y: 0 <= x < game.size_x and 0 <= y < game.size_y
+
+    for dx, dy in [(1, 0), (0, 1), (-1, 0), (0, -1)]:
+        new_x, new_y = x + dx, y + dy
+
+        if not is_valid(new_x, new_y):
+            continue
+
+        value = game.board[new_x][new_y]
+        if value > best_neighbour_value and value < game.board[x][y]:
+            best_neighbour_value = value
+            best_neighbour_positions = [(new_x, new_y)]
+        elif value == best_neighbour_value:
+            best_neighbour_positions.append((new_x, new_y))
+
+    best_val = 1
+    for x, y in best_neighbour_positions:
+        best_val = max(best_val, 1 + process_long_falling_from_tile(game, x, y))
+
+    return best_val
+
+
+def find_max_path_from_tiles(game: Game2048) -> int:
+    # Min value is 2, max is 4*4 = 16
+    max_tile_value = 0
+    for x, y in itertools.product(range(game.size_x), range(game.size_y)):
+        if game.board[x][y] > max_tile_value:
+            max_tile_value = game.board[x][y]
+
+    longest_path = 0
+    for x, y in itertools.product(range(game.size_x), range(game.size_y)):
+        if game.board[x][y] == max_tile_value:
+            longest_path = max(longest_path, process_long_falling_from_tile(game, x, y))
+
+    return longest_path
+
+
 def play_game(
     get_net_moves: Callable,
     board_size_x: int = BOARD_SIZE_X,
@@ -97,9 +141,9 @@ def play_game(
     game = Game2048(board_size_x, board_size_y)
     game.add_random_tile()  # Add first tile
 
-    moves_count = 0
-    illegal_moves_count = 0
-    empty_cells_count = 0
+    # moves_count = 0
+    # illegal_moves_count = 0
+    # empty_cells_count = 0
 
     while not game.game_end:
         moves = get_net_moves(game)
@@ -108,27 +152,32 @@ def play_game(
             changed = game.move(move)
             if changed:
                 break
-            else:
-                illegal_moves_count += 1
+            # else:
+            #     illegal_moves_count += 1
 
-        empty_cells_count += game.empty_cells
-        moves_count += 1
+        # empty_cells_count += game.empty_cells
+        # moves_count += 1
 
-    fitness: float = 0
+    # fitness: float = 0
 
-    fitness += log2(game.score + 1) * GAME_SCORE_AWARD
-    fitness += moves_count * MOVES_COUNT_AWARD
-    fitness += (
-        empty_cells_count / (board_size_x * board_size_y)
-    ) * EMPTY_CELL_COUNT_AWARD  # normalize
-    fitness += (
-        log2(max([max(row) for row in game.board]))
-        / log2(get_max_possible_tile(board_size_x, board_size_y))
-    ) * MAX_TITLE_AWARD  # Bonus for max tile
+    # fitness += log2(game.score + 1) * GAME_SCORE_AWARD
+    # fitness += moves_count * MOVES_COUNT_AWARD
+    # fitness += (
+    #     empty_cells_count / (board_size_x * board_size_y)
+    # ) * EMPTY_CELL_COUNT_AWARD  # normalize
+    # fitness += (
+    #     log2(max([max(row) for row in game.board]))
+    #     / log2(get_max_possible_tile(board_size_x, board_size_y))
+    # ) * MAX_TITLE_AWARD  # Bonus for max tile
 
-    fitness -= illegal_moves_count * ILLIGAL_MOVE_PENALTY
+    # fitness -= illegal_moves_count * ILLIGAL_MOVE_PENALTY
 
-    return fitness  # 100 is a magic number
+    # return fitness  # 100 is a magic number
+
+    # Use magic path for now
+    path_val: int = find_max_path_from_tiles(game)
+
+    return path_val
 
 
 def get_fitness(
@@ -157,7 +206,7 @@ def calculate_fitness(
     net = neat.nn.FeedForwardNetwork.create(genome, config)
 
     def get_net_moves(game: Game2048) -> list[tuple[int, float]]:
-        inputs = board_to_input_v1(game.board)
+        inputs = board_to_input(game.board)
         outputs = net.activate(inputs)
         moves = [(i, output) for i, output in enumerate(outputs)]
 
