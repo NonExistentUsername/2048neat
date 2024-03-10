@@ -103,117 +103,93 @@ class Game2048:
     ) -> None:  # Only for testing purposes
         self.__board[key[0]][key[1]] = value
 
-    def __move_left(self) -> None:
-        collected_tiles = [[] for _ in range(self.__size_y)]
-
-        # Collect tiles
+    def __move_horizontal(self, dx: int, start_l: int, start_r: int) -> None:
         for y in range(self.__size_y):
-            for x in range(self.__size_x):
-                if self.__board[y][x] == 0:
+            l, r = start_l, start_r
+            while 0 <= r < self.__size_x:
+                if self.__board[y][r] == 0:
+                    # skip empty tiles
+                    r += dx
                     continue
-                # Add current tile to collected tiles
-                # but if the last collected tile is the same as the current tile
-                # then merge them
-                if collected_tiles[y] and collected_tiles[y][-1] == self.__board[y][x]:
-                    collected_tiles[y][-1] *= 2
-                    self.__score += collected_tiles[y][-1]
-                else:
-                    collected_tiles[y].append(self.__board[y][x])
 
-        # Fill board with collected tiles
-        for y in range(self.__size_y):
-            collected_tiles[y].reverse()
+                if self.__board[y][l] == self.__board[y][r]:
+                    # collapse two tiles
+                    self.__board[y][l] *= 2
+                    self.__score += self.__board[y][l]
 
-            for x in range(self.__size_x):
-                if collected_tiles[y]:
-                    tile = collected_tiles[y].pop()
-                    self.__board[y][x] = tile
-                else:
-                    self.__board[y][x] = 0
+                    r += dx
+                    l += dx
+
+                    self.__board[y][l] = 0  # clear l, so it can be used
+                    continue
+
+                if self.__board[y][l] == 0:
+                    # move r to l
+                    self.__board[y][l] = self.__board[y][r]
+                    r += dx
+                    continue
+
+                # move l and place r on l
+                l += dx
+                self.__board[y][l] = self.__board[y][r]
+
+                r += dx
+
+            # clear rest of the row
+            l += dx
+            while l != r:
+                self.__board[y][l] = 0
+                l += dx
+
+    def __move_vertical(self, dy: int, start_u: int, start_d: int) -> None:
+        for x in range(self.__size_x):
+            u, d = start_u, start_d
+            while 0 <= d < self.__size_y:
+                if self.__board[d][x] == 0:
+                    # skip empty tiles
+                    d += dy
+                    continue
+
+                if self.__board[u][x] == self.__board[d][x]:
+                    # collapse two tiles
+                    self.__board[u][x] *= 2
+                    self.__score += self.__board[u][x]
+
+                    d += dy
+                    u += dy
+
+                    self.__board[u][x] = 0
+                    continue
+
+                if self.__board[u][x] == 0:
+                    # move d to u
+                    self.__board[u][x] = self.__board[d][x]
+                    d += dy
+                    continue
+
+                # move u and place d on u
+                u += dy
+                self.__board[u][x] = self.__board[d][x]
+
+                d += dy
+
+            # clear rest of the column
+            u += dy
+            while u != d:
+                self.__board[u][x] = 0
+                u += dy
+
+    def __move_left(self) -> None:
+        self.__move_horizontal(1, 0, 1)
 
     def __move_right(self) -> None:
-        collected_tiles = [[] for _ in range(self.__size_y)]
-
-        # Collect tiles
-        for y in range(self.__size_y):
-            for x in range(self.__size_x - 1, -1, -1):
-                if self.__board[y][x] == 0:
-                    continue
-                # Add current tile to collected tiles
-                # but if the last collected tile is the same as the current tile
-                # then merge them
-                if collected_tiles[y] and collected_tiles[y][-1] == self.__board[y][x]:
-                    collected_tiles[y][-1] *= 2
-                    self.__score += collected_tiles[y][-1]
-                else:
-                    collected_tiles[y].append(self.__board[y][x])
-
-        # Fill board with collected tiles
-        for y in range(self.__size_y):
-            collected_tiles[y].reverse()
-
-            for x in range(self.__size_x - 1, -1, -1):
-                if collected_tiles[y]:
-                    tile = collected_tiles[y].pop()
-                    self.__board[y][x] = tile
-                else:
-                    self.__board[y][x] = 0
+        self.__move_horizontal(-1, self.__size_x - 1, self.__size_x - 2)
 
     def __move_up(self) -> None:
-        collected_tiles = [[] for _ in range(self.__size_x)]
-
-        # Collect tiles
-        for x in range(self.__size_x):
-            for y in range(self.__size_y):
-                if self.__board[y][x] == 0:
-                    continue
-                # Add current tile to collected tiles
-                # but if the last collected tile is the same as the current tile
-                # then merge them
-                if collected_tiles[x] and collected_tiles[x][-1] == self.__board[y][x]:
-                    collected_tiles[x][-1] *= 2
-                    self.__score += collected_tiles[x][-1]
-                else:
-                    collected_tiles[x].append(self.__board[y][x])
-
-        # Fill board with collected tiles
-        for x in range(self.__size_x):
-            collected_tiles[x].reverse()
-
-            for y in range(self.__size_y):
-                if collected_tiles[x]:
-                    tile = collected_tiles[x].pop()
-                    self.__board[y][x] = tile
-                else:
-                    self.__board[y][x] = 0
+        self.__move_vertical(1, 0, 1)
 
     def __move_down(self) -> None:
-        collected_tiles = [[] for _ in range(self.__size_x)]
-
-        # Collect tiles
-        for x in range(self.__size_x):
-            for y in range(self.__size_y - 1, -1, -1):
-                if self.__board[y][x] == 0:
-                    continue
-                # Add current tile to collected tiles
-                # but if the last collected tile is the same as the current tile
-                # then merge them
-                if collected_tiles[x] and collected_tiles[x][-1] == self.__board[y][x]:
-                    collected_tiles[x][-1] *= 2
-                    self.__score += collected_tiles[x][-1]
-                else:
-                    collected_tiles[x].append(self.__board[y][x])
-
-        # Fill board with collected tiles
-        for x in range(self.__size_x):
-            collected_tiles[x].reverse()
-
-            for y in range(self.__size_y - 1, -1, -1):
-                if collected_tiles[x]:
-                    tile = collected_tiles[x].pop()
-                    self.__board[y][x] = tile
-                else:
-                    self.__board[y][x] = 0
+        self.__move_vertical(-1, self.__size_y - 1, self.__size_y - 2)
 
     def move(self, move, add_random_tile: bool = True) -> bool:
         if move not in MOVES:
