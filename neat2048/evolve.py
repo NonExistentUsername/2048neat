@@ -7,7 +7,7 @@ import neat
 from fitness import calculate_fitness
 from fitness_hyper import calculate_fitness as calculate_fitness_hyper
 
-ENABLE_HYPER = True
+ENABLE_HYPER = False
 
 
 class CustomParallelEvaluator(neat.ParallelEvaluator):
