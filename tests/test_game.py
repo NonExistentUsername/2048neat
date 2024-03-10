@@ -49,6 +49,58 @@ def test_move_up(game_with_square_of_2_3x3_size):
     assert game.board == [[4, 4, 4, 0], [2, 2, 2, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
     assert game.score == 12
 
+    game: Game2048 = Game2048()
+    for x in range(4):
+        for y in range(4):
+            if x == 0:
+                game[x][y] = 4
+            elif x < 3:
+                game[x][y] = 2
+            else:
+                game[x][y] = 0
+
+    assert game.board == [
+        [4, 4, 4, 4],
+        [2, 2, 2, 2],
+        [2, 2, 2, 2],
+        [0, 0, 0, 0],
+    ]
+
+    game.move(UP, add_random_tile=False)
+
+    assert game.board == [
+        [4, 4, 4, 4],
+        [4, 4, 4, 4],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+    ]
+
+    game: Game2048 = Game2048()
+    for x in range(4):
+        for y in range(4):
+            if x == 2:
+                game[x][y] = 4
+            elif x < 3:
+                game[x][y] = 2
+            else:
+                game[x][y] = 0
+
+    assert game.board == [
+        [2, 2, 2, 2],
+        [2, 2, 2, 2],
+        [4, 4, 4, 4],
+        [0, 0, 0, 0],
+    ]
+
+    game.move(UP, add_random_tile=False)
+
+    assert game.board == [
+        [4, 4, 4, 4],
+        [4, 4, 4, 4],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+    ]
+
 
 def test_moves_4x4(game_with_square_of_8_4x4_size):
     game: Game2048 = game_with_square_of_8_4x4_size
@@ -111,6 +163,58 @@ def test_move_right(game_with_square_of_2_3x3_size):
 
     assert game.board == [[0, 0, 2, 4], [0, 0, 2, 4], [0, 0, 2, 4], [0, 0, 0, 0]]
     assert game.score == 12
+
+    game: Game2048 = Game2048()
+    for x in range(4):
+        for y in range(4):
+            if y == 3:
+                game[x][y] = 4
+            elif y > 0:
+                game[x][y] = 2
+            else:
+                game[x][y] = 0
+
+    assert game.board == [
+        [0, 2, 2, 4],
+        [0, 2, 2, 4],
+        [0, 2, 2, 4],
+        [0, 2, 2, 4],
+    ]
+
+    game.move(RIGHT, add_random_tile=False)
+
+    assert game.board == [
+        [0, 0, 4, 4],
+        [0, 0, 4, 4],
+        [0, 0, 4, 4],
+        [0, 0, 4, 4],
+    ]
+
+    game: Game2048 = Game2048()
+    for x in range(4):
+        for y in range(4):
+            if y == 1:
+                game[x][y] = 4
+            elif y > 0:
+                game[x][y] = 2
+            else:
+                game[x][y] = 0
+
+    assert game.board == [
+        [0, 4, 2, 2],
+        [0, 4, 2, 2],
+        [0, 4, 2, 2],
+        [0, 4, 2, 2],
+    ]
+
+    game.move(RIGHT, add_random_tile=False)
+
+    assert game.board == [
+        [0, 0, 4, 4],
+        [0, 0, 4, 4],
+        [0, 0, 4, 4],
+        [0, 0, 4, 4],
+    ]
 
 
 def test_move_down(game_with_square_of_2_3x3_size):
