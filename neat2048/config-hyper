@@ -1,24 +1,24 @@
 [NEAT]
 fitness_criterion      = max
 fitness_threshold      = 1000000000000
-pop_size               = 64
+pop_size               = 128
 reset_on_extinction    = False
 no_fitness_termination = True
 
 [DefaultGenome]
-num_inputs              = 8
-num_hidden              = 0
+num_inputs              = 5
+num_hidden              = 6
 num_outputs             = 2
-initial_connection      = unconnected
+initial_connection      = full_direct
 feed_forward            = True
 compatibility_disjoint_coefficient    = 1.0
-compatibility_weight_coefficient      = 0.5
+compatibility_weight_coefficient      = 2.2
 conn_add_prob           = 0.3
 conn_delete_prob        = 0.3
 node_add_prob           = 0.2
 node_delete_prob        = 0.2
 activation_default      = random
-activation_options      = abs cube gauss hat identity inv hat log relu sigmoid sin square tanh
+activation_options      = abs hat relu sigmoid sin
 activation_mutate_rate  = 0.2
 aggregation_default     = sum
 aggregation_options     = sum
@@ -51,7 +51,7 @@ enabled_default         = True
 enabled_mutate_rate     = 0.1
 
 [DefaultSpeciesSet]
-compatibility_threshold = 2.5
+compatibility_threshold = 6.0
 
 [DefaultStagnation]
 species_fitness_func = max

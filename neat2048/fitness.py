@@ -1,5 +1,5 @@
 import random
-from math import log1p, log2
+from math import log2
 from typing import Callable
 
 import neat
@@ -9,8 +9,8 @@ from neat2048.game import Game2048
 INFINITY = 10000000000000000000
 
 ### START SETTINGS ###
-GAMES_COUNT = 4
-COUNT_OF_MINIMAL_SCORES_AS_FITNESS = 4
+GAMES_COUNT = 10
+COUNT_OF_MINIMAL_SCORES_AS_FITNESS = 5
 
 BOARD_SIZE_X = 4
 BOARD_SIZE_Y = 4
@@ -25,15 +25,15 @@ IDEAL_MONOTONICITY = BOARD_SIZE_X * (BOARD_SIZE_Y - 1) + BOARD_SIZE_Y * (
 
 
 ### START AWARDS ###
-GAME_SCORE_AWARD = 0.2 * 1
-MOVES_COUNT_AWARD = 0.0011 * 0
-EMPTY_CELL_COUNT_AWARD = 1 * 0
-MAX_TITLE_AWARD = 2 * 0  # Off for now
+GAME_SCORE_AWARD = 0.03 * 1 * 0  # Off for now
+MOVES_COUNT_AWARD = 0.002 * 1 * 0  # Off for now
+EMPTY_CELL_COUNT_AWARD = 1
+MAX_TITLE_AWARD = 0.4 * 0  # Off for now
 MONOTONICITY_AWARD = 2.5 * 0  # Off for now
 ### END AWARDS ###
 
 ### START PENALTIES ###
-ILLIGAL_MOVE_PENALTY = 0.03 * 0.1
+ILLIGAL_MOVE_PENALTY = 0.03 * 0
 ### END PENALTIES ###
 
 
@@ -76,40 +76,11 @@ def board_to_input_v1(board: list[list[int]]) -> list[float]:
             inputs.append(tile)
 
     # normalize
-    max_tile = max(inputs)
+    inputs = [log2(float(x) + 1) for x in inputs]
+    max_tile = float(max(inputs))
     inputs = [x / max_tile for x in inputs]
 
     return inputs
-
-
-# def calc_board_monotonicity(game: Game2048) -> int:
-#     monotonicity = 0
-
-#     for x in range(0, BOARD_SIZE_X):
-#         right_to_left_count = 0
-#         left_to_right_count = 0
-
-#         for y in range(0, BOARD_SIZE_Y - 1):
-#             if game[x][y] > game[x][y + 1]:
-#                 right_to_left_count += 1
-#             elif game[x][y] < game[x][y + 1]:
-#                 left_to_right_count += 1
-
-#         monotonicity += max(right_to_left_count, left_to_right_count)
-
-#     for y in range(0, BOARD_SIZE_Y):
-#         top_to_bottom_count = 0
-#         bottom_to_top_count = 0
-
-#         for x in range(0, BOARD_SIZE_X - 1):
-#             if game[x][y] > game[x + 1][y]:
-#                 top_to_bottom_count += 1
-#             elif game[x][y] < game[x + 1][y]:
-#                 bottom_to_top_count += 1
-
-#         monotonicity += max(top_to_bottom_count, bottom_to_top_count)
-
-#     return monotonicity
 
 
 def get_max_possible_tile(
@@ -143,12 +114,12 @@ def play_game(
         empty_cells_count += game.empty_cells
         moves_count += 1
 
-    fitness = 0
+    fitness: float = 0
 
     fitness += log2(game.score + 1) * GAME_SCORE_AWARD
     fitness += moves_count * MOVES_COUNT_AWARD
     fitness += (
-        empty_cells_count / (moves_count * board_size_x * board_size_y)
+        empty_cells_count / (board_size_x * board_size_y)
     ) * EMPTY_CELL_COUNT_AWARD  # normalize
     fitness += (
         log2(max([max(row) for row in game.board]))
@@ -186,7 +157,7 @@ def calculate_fitness(
     net = neat.nn.FeedForwardNetwork.create(genome, config)
 
     def get_net_moves(game: Game2048) -> list[tuple[int, float]]:
-        inputs = board_to_input(game.board)
+        inputs = board_to_input_v1(game.board)
         outputs = net.activate(inputs)
         moves = [(i, output) for i, output in enumerate(outputs)]
 

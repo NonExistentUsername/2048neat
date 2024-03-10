@@ -1,143 +1,150 @@
 from dataclasses import dataclass
+from typing import Callable, Optional
 
-import neat
-import torch
-
-
-@dataclass
-class LayerDescriptor:
-    size_x: int
-    size_y: int
-    size_z: int
-
-    @property
-    def size(self) -> int:
-        return self.size_x * self.size_y * self.size_z
-
-    @property
-    def sizes(self) -> tuple[int, int]:
-        return (self.size_x, self.size_y, self.size_z)
-
-    def id_to_coordinates(self, id: int) -> tuple[int, int, int]:
-        if id >= self.size:
-            raise ValueError("id is too big")
-        if id < 0:
-            raise ValueError("id is too small")
-
-        z = id // (self.size_x * self.size_y)
-        id -= z * self.size_x * self.size_y
-        y = id // self.size_x
-        x = id % self.size_x
-
-        return (x, y, z)
-
-    def normalize_coordinates(
-        self, x: int, y: int, z: int
-    ) -> tuple[float, float, float]:
-        return (
-            x / (self.size_x - 1),
-            y / (self.size_y - 1),
-            z / (self.size_z - 1),
-        )
-
-    def coordinates_to_id(self, x: int, y: int, z: int) -> int:
-        return z * self.size_x * self.size_y + y * self.size_x + x
+import numpy as np
 
 
-class Game2048Network(torch.nn.Module):
+class HyperNetwork:
     def __init__(
         self,
-        first_layer: LayerDescriptor,
-        hidden_layer: LayerDescriptor,
-        output_layer: LayerDescriptor,
-        cppn: neat.nn.FeedForwardNetwork,
+        first_layer: list[int],  # (size_x, size_y, size_z)
+        hidden_layer: list[int],  # (size_x, size_y, size_z) or (size_x, size_y)
+        output_layer: list[int],  # (size_x)
+        cppn: Callable[[list[float]], list[float]],
     ):
-        super(Game2048Network, self).__init__()
+        # write sigmoid function using numpy
+        # self.activation_function = lambda x: 1 / (1 + np.exp(-x))
+        # Relu
+        self.activation_function = lambda x: np.maximum(x, 0)
 
-        self.cppn = cppn  # It for weights initialization only
-        # Input is coordinates of first square, second square and output
-        # output have two squares of 64 neurons each
-        # 7 inputs in total
-        # (2 for first square, 2 for second square, 3 for output squares)
-        # Output is the 4 weights for the connection between the 1 and 2 layer and
-        # the 1 weight for the connection between the 2 and 3 layer
-        # 5 outputs in total
-
-        # self.first_l = LayerDescriptor(4, 4, 5)
-        # self.hidden_l = LayerDescriptor(4, 4, 1)
-        # self.output_l = LayerDescriptor(4, 1, 1)
-        self.first_l = first_layer
-        self.hidden_l = hidden_layer
-        self.output_l = output_layer
-
-        # First layer is 64 * 4 (piece type and color) = 256 neurons
-
-        self.net = torch.nn.Sequential(
-            torch.nn.Linear(self.first_l.size, self.hidden_l.size),
-            torch.nn.Sigmoid(),
-            torch.nn.Linear(self.hidden_l.size, self.output_l.size),
-            torch.nn.Sigmoid(),
+        self.first_layer_mat = np.zeros(
+            (np.prod(hidden_layer), np.prod(first_layer)), dtype=np.float32
+        )
+        self.hidden_layer_mat = np.zeros(
+            (np.prod(output_layer), np.prod(hidden_layer)), dtype=np.float32
         )
 
-        self.init_weights()
+        self.init_weights(first_layer, hidden_layer, output_layer, cppn)
 
-    def _get_weights(
+    # def _rec_init_weights(
+    #     self,
+    #     layers: list[list[int]],
+    #     cppn: Callable[[list[float]], list[float]],
+    #     index: int = 0,
+    #     inputs: Optional[list[int]] = None,
+    # ):
+    #     if inputs is None:
+    #         inputs = []
+
+    #     layer = layers[index]  # (size_x, size_y, size_z)
+
+    #     for x in range(layer[0]):
+    #         for y in range(layer[1]):
+    #             if len(layer) == 3:
+    #                 for z in range(layer[2]):
+    #                     inputs.append(x)
+    #                     inputs.append(y)
+    #                     inputs.append(z)
+
+    #                     if index < len(layers) - 1:
+    #                         self._rec_init_weights(layers, cppn, index + 1, inputs)
+    #                     else:
+    #                         weights = cppn(**inputs)
+
+    #                         for layer_id in range(len(layers) - 1):
+    #                             self.first_layer_mat[
+    #                                 x * layer[1] + y,
+    #                                 x * layer[1] + y,
+    #                             ] = weights[layer_id]
+
+    #                     inputs.pop()
+    #                     inputs.pop()
+    #                     inputs.pop()
+    #             else:
+    #                 inputs.append(x)
+    #                 inputs.append(y)
+
+    #                 if index < len(layers) - 1:
+    #                     self._rec_init_weights(layers, cppn, index + 1, inputs)
+    #                 else:
+    #                     weights = cppn(inputs)
+
+    #                     self.first_layer_mat[
+    #                         x * layer[1] + y,
+    #                         x * layer[1] + y,
+    #                     ] = weights[0]
+
+    #                     self.hidden_layer_mat[
+    #                         x * layer[1] + y,
+    #                         x * layer[1] + y,
+    #                     ] = weights[1]
+
+    #                 inputs.pop()
+    #                 inputs.pop()
+
+    def init_weights(
         self,
-        inputs: list[float],
+        first_layer: list[int],
+        hidden_layer: list[int],
+        output_layer: list[int],
+        cppn: Callable[[list[float]], list[float]],
     ):
-        return self.cppn.activate(inputs)
+        first_layer_size = np.prod(first_layer)
+        hidden_layer_size = np.prod(hidden_layer)
+        output_layer_size = np.prod(output_layer)
 
-    def init_weights(self):
         ### FIRST LAYER ###
-        for f_l_x in range(self.first_l.size_x):
-            for f_l_y in range(self.first_l.size_y):
-                for f_l_z in range(self.first_l.size_z):
-                    ### FIRST LAYER ###
+        for fl_index in range(first_layer_size):
+            inputs_fl = []
+            _tmp = fl_index
 
-                    ### HIDDEN LAYER ###
-                    for h_l_x in range(self.hidden_l.size_x):
-                        for h_l_y in range(self.hidden_l.size_y):
-                            for h_l_z in range(self.hidden_l.size_z):
-                                ### HIDDEN LAYER ###
+            for dimension_size in first_layer:
+                _tmp, index = divmod(_tmp, dimension_size)
+                inputs_fl.append(index)
+            ### FIRST LAYER ###
 
-                                ### OUTPUT LAYER ###
-                                for o_l_x in range(self.output_l.size_x):
-                                    for o_l_y in range(self.output_l.size_y):
-                                        o_l_z = 0
+            ### HIDDEN LAYER ###
+            for hl_index in range(hidden_layer_size):
+                inputs_hl = []
+                _tmp = hl_index
 
-                                        ### OUTPUT LAYER ###
+                for dimension_size in hidden_layer:
+                    _tmp, index = divmod(_tmp, dimension_size)
+                    inputs_hl.append(index)
+                ### HIDDEN LAYER ###
 
-                                        # create inputs
-                                        inputs = [
-                                            (f_l_x - 1) / (self.first_l.size_x),
-                                            (f_l_y - 1) / (self.first_l.size_y),
-                                            (f_l_z - 1) / (self.first_l.size_z),
-                                            (h_l_x - 1) / (self.hidden_l.size_x),
-                                            (h_l_y - 1) / (self.hidden_l.size_y),
-                                            (h_l_z - 1) / (self.hidden_l.size_z),
-                                            (o_l_x - 1) / (self.output_l.size_x),
-                                            (o_l_y - 1) / (self.output_l.size_y),
-                                        ]
+                ### OUTPUT LAYER ###
+                for ol_index in range(output_layer_size):
+                    inputs_ol = []
+                    _tmp = ol_index
 
-                                        outputs = self._get_weights(inputs)
+                    for dimension_size in output_layer:
+                        _tmp, index = divmod(_tmp, dimension_size)
+                        inputs_ol.append(index)
+                    ### OUTPUT LAYER ###
 
-                                        self.net[0].weight.data[
-                                            self.hidden_l.coordinates_to_id(
-                                                h_l_x, h_l_y, h_l_z
-                                            ),
-                                            self.first_l.coordinates_to_id(
-                                                f_l_x, f_l_y, f_l_z
-                                            ),
-                                        ] = outputs[0]
+                    weights = cppn(
+                        [
+                            *inputs_fl,
+                            *inputs_hl,
+                            *inputs_ol,
+                        ]
+                    )
 
-                                        self.net[2].weight.data[
-                                            self.output_l.coordinates_to_id(
-                                                o_l_x, o_l_y, o_l_z
-                                            ),
-                                            self.hidden_l.coordinates_to_id(
-                                                h_l_x, h_l_y, h_l_z
-                                            ),
-                                        ] = outputs[1]
+                    self.first_layer_mat[
+                        hl_index,
+                        fl_index,
+                    ] = weights[0]
 
-    def forward(self, input):
-        return self.net(input)
+                    self.hidden_layer_mat[
+                        ol_index,
+                        hl_index,
+                    ] = weights[1]
+
+    def forward(self, input: list[float]):
+        input = np.array(input, dtype=np.float32)
+        hidden_layer_input = self.first_layer_mat @ input
+        hidden_layer_output = self.activation_function(hidden_layer_input)
+        output = self.hidden_layer_mat @ hidden_layer_output
+        output = self.activation_function(output)
+        return output

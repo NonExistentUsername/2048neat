@@ -3,7 +3,7 @@ from copy import deepcopy
 
 MOVES = [UP, DOWN, RIGHT, LEFT] = range(4)
 
-ADD_4_PROBABILITY = 0.1  # Set to 0.1 for 2048, 0.0 for simpler version of game
+ADD_4_PROBABILITY = 0.0  # Set to 0.1 for 2048, 0.0 for simpler version of game
 
 
 class Game2048:

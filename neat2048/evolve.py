@@ -45,7 +45,7 @@ def run(config_file):
         )
     else:
         pe = CustomParallelEvaluator(multiprocessing.cpu_count(), calculate_fitness)
-    winner = p.run(pe.evaluate, 500)
+    winner = p.run(pe.evaluate, 5000)
 
     print("\nBest genome:\n{!s}".format(winner))
 

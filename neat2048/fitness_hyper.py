@@ -3,19 +3,18 @@ from math import log2, sin
 from typing import Callable, Tuple
 
 import neat
-import torch
 
 from neat2048.fitness import board_to_input, board_to_input_v1, get_fitness
 from neat2048.game import Game2048
-from neat2048.hyper import Game2048Network, LayerDescriptor
+from neat2048.hyper import HyperNetwork
 
 
 def get_layers_descriptors(
     board_size_x, board_size_y
-) -> Tuple[LayerDescriptor, LayerDescriptor, LayerDescriptor]:
-    first_l = LayerDescriptor(board_size_x, board_size_y, 1)
-    hidden_l = LayerDescriptor(4, 4, 2)
-    output_l = LayerDescriptor(4, 1, 1)
+) -> Tuple[list[int], list[int], list[int]]:
+    first_l = [board_size_x, board_size_y]
+    hidden_l = [12, 12]
+    output_l = [4]
 
     return first_l, hidden_l, output_l
 
@@ -25,12 +24,16 @@ def calculate_fitness(
 ) -> None:
     random.seed(global_seed)
     cppn = neat.nn.FeedForwardNetwork.create(genome, config)
+
+    def get_weights(inputs: list[float]) -> list[float]:
+        return cppn.activate(inputs)
+
     net = None
 
     def get_net_moves(game: Game2048) -> list[tuple[int, float]]:
         nonlocal net
         inputs = board_to_input_v1(game.board)
-        outputs = net.forward(torch.tensor(inputs, dtype=torch.float32)).tolist()
+        outputs = net.forward(inputs)
         moves = [(i, output) for i, output in enumerate(outputs)]
 
         return moves
@@ -39,6 +42,7 @@ def calculate_fitness(
         [2, 2],
         [3, 3],
         [4, 4],
+        [5, 5],
     ]
 
     total_fitness = 1
@@ -46,16 +50,15 @@ def calculate_fitness(
     for board_size in board_sizes:
         board_size_x, board_size_y = board_size
         descriptors = get_layers_descriptors(board_size_x, board_size_y)
-        net = Game2048Network(*descriptors, cppn)
-        net.init_weights()
+        net = HyperNetwork(*descriptors, get_weights)
 
         fitness = get_fitness(
             get_net_moves,
             games_count=4,
-            count_of_minimal_scores_as_fitness=1,
+            count_of_minimal_scores_as_fitness=2,
             board_size_x=board_size_x,
             board_size_y=board_size_y,
         )
         total_fitness *= fitness + 1
 
-    return total_fitness
+    return log2(total_fitness)
