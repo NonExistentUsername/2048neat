@@ -2,6 +2,8 @@ import itertools
 import random
 from copy import deepcopy
 
+import numpy as np
+
 MOVES = [UP, DOWN, RIGHT, LEFT] = range(4)
 
 ADD_4_PROBABILITY = 0.0  # Set to 0.1 for 2048, 0.0 for simpler version of game
@@ -29,6 +31,12 @@ class Game2048:
     @property
     def board(self) -> list[list[int]]:
         return deepcopy(self.__board)
+
+    def copy(self) -> "Game2048":
+        game = Game2048(self.__size_x, self.__size_y)
+        game.__board = deepcopy(self.__board)
+        game.__score = self.__score
+        return game
 
     def __hash__(self) -> int:
         p = 1

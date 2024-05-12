@@ -1,150 +1,108 @@
+import itertools
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, List, Optional, Tuple
 
 import numpy as np
+import torch
+from torch import nn
+from torch.utils.data import DataLoader
 
 
-class HyperNetwork:
+def layers_positions(layers: List[Tuple[int, int]]):
+    sizes: List[int] = []
+    for layer in layers:
+        sizes.extend(layer)
+
+    yield from itertools.product(*[range(size) for size in sizes])
+
+
+def scale_value(value: float, max_value: float) -> float:
+    return 2 * (value + 1) / max_value - 1
+
+
+def scale_position(position: list[float], layers: List[Tuple[int, int]]) -> list[float]:
+    new_position: list[float] = []
+
+    for index in range(0, len(position), 2):
+        size_x, size_y = layers[index // 2]
+        new_position.extend(
+            (
+                position[index] / (size_x - size_x % 2),
+                position[index + 1] / (size_y - size_y % 2),
+            )
+        )
+
+    return new_position
+
+
+def create_sequential(layers: List[Tuple[int, int]], cppn) -> nn.Sequential:
+    activation_function = nn.ReLU
+
+    # Create linear layers
+    linear_layers: List[nn.Linear] = []
+    for index in range(len(layers) - 1):
+        input_size = layers[index][0] * layers[index][1]
+        output_size = layers[index + 1][0] * layers[index + 1][1]
+
+        linear_layers.append(nn.Linear(input_size, output_size))
+
+    # Init weights using cppn
+    with torch.no_grad():
+        for layer_bottom_index in range(len(layers) - 1):
+            layer_top_index = layer_bottom_index + 1
+            bottom_layer, top_layer = (
+                layers[layer_bottom_index],
+                layers[layer_top_index],
+            )
+            bottom_layer_size_x, bottom_layer_size_y = bottom_layer
+            top_layer_size_x, top_layer_size_y = top_layer
+
+            for bottom_position in itertools.product(
+                range(bottom_layer[0]), range(bottom_layer[1])
+            ):
+                bottom_position_x, bottom_position_y = bottom_position
+
+                for top_position in itertools.product(
+                    range(top_layer[0]), range(top_layer[1])
+                ):
+                    top_position_x, top_position_y = top_position
+
+                    position = [
+                        scale_value(bottom_position_x, bottom_layer_size_x),
+                        scale_value(bottom_position_y, bottom_layer_size_y),
+                        scale_value(top_position_x, top_layer_size_x),
+                        scale_value(top_position_y, top_layer_size_y),
+                    ]
+                    weights = cppn(position)
+                    weight = weights[layer_bottom_index]
+
+                    pos_a = bottom_position_x + bottom_position_y * bottom_layer_size_x
+                    pos_b = top_position_x + top_position_y * top_layer_size_x
+                    linear_layer = linear_layers[layer_bottom_index]
+                    linear_layer.weight[pos_b, pos_a] = weight if weight >= 0.2 else 0.0
+
+    s_layers = []
+    for linear_layer in linear_layers:
+        s_layers.extend([linear_layer, activation_function()])
+
+    return nn.Sequential(*s_layers)
+
+
+class HyperNetwork(nn.Module):
     def __init__(
         self,
-        first_layer: list[int],  # (size_x, size_y, size_z)
-        hidden_layer: list[int],  # (size_x, size_y, size_z) or (size_x, size_y)
-        output_layer: list[int],  # (size_x)
+        layers: List[Tuple[int, int]],
         cppn: Callable[[list[float]], list[float]],
     ):
-        # write sigmoid function using numpy
-        # self.activation_function = lambda x: 1 / (1 + np.exp(-x))
-        # Relu
-        self.activation_function = lambda x: np.maximum(x, 0)
+        super().__init__()
+        self.activation_function = lambda x: np.maximum(x, 0)  # ReLU
 
-        self.first_layer_mat = np.zeros(
-            (np.prod(hidden_layer), np.prod(first_layer)), dtype=np.float32
-        )
-        self.hidden_layer_mat = np.zeros(
-            (np.prod(output_layer), np.prod(hidden_layer)), dtype=np.float32
-        )
+        self.net = create_sequential(layers, cppn)
 
-        self.init_weights(first_layer, hidden_layer, output_layer, cppn)
-
-    # def _rec_init_weights(
-    #     self,
-    #     layers: list[list[int]],
-    #     cppn: Callable[[list[float]], list[float]],
-    #     index: int = 0,
-    #     inputs: Optional[list[int]] = None,
-    # ):
-    #     if inputs is None:
-    #         inputs = []
-
-    #     layer = layers[index]  # (size_x, size_y, size_z)
-
-    #     for x in range(layer[0]):
-    #         for y in range(layer[1]):
-    #             if len(layer) == 3:
-    #                 for z in range(layer[2]):
-    #                     inputs.append(x)
-    #                     inputs.append(y)
-    #                     inputs.append(z)
-
-    #                     if index < len(layers) - 1:
-    #                         self._rec_init_weights(layers, cppn, index + 1, inputs)
-    #                     else:
-    #                         weights = cppn(**inputs)
-
-    #                         for layer_id in range(len(layers) - 1):
-    #                             self.first_layer_mat[
-    #                                 x * layer[1] + y,
-    #                                 x * layer[1] + y,
-    #                             ] = weights[layer_id]
-
-    #                     inputs.pop()
-    #                     inputs.pop()
-    #                     inputs.pop()
-    #             else:
-    #                 inputs.append(x)
-    #                 inputs.append(y)
-
-    #                 if index < len(layers) - 1:
-    #                     self._rec_init_weights(layers, cppn, index + 1, inputs)
-    #                 else:
-    #                     weights = cppn(inputs)
-
-    #                     self.first_layer_mat[
-    #                         x * layer[1] + y,
-    #                         x * layer[1] + y,
-    #                     ] = weights[0]
-
-    #                     self.hidden_layer_mat[
-    #                         x * layer[1] + y,
-    #                         x * layer[1] + y,
-    #                     ] = weights[1]
-
-    #                 inputs.pop()
-    #                 inputs.pop()
-
-    def init_weights(
-        self,
-        first_layer: list[int],
-        hidden_layer: list[int],
-        output_layer: list[int],
-        cppn: Callable[[list[float]], list[float]],
-    ):
-        first_layer_size = np.prod(first_layer)
-        hidden_layer_size = np.prod(hidden_layer)
-        output_layer_size = np.prod(output_layer)
-
-        ### FIRST LAYER ###
-        for fl_index in range(first_layer_size):
-            inputs_fl = []
-            _tmp = fl_index
-
-            for dimension_size in first_layer:
-                _tmp, index = divmod(_tmp, dimension_size)
-                inputs_fl.append(index)
-            ### FIRST LAYER ###
-
-            ### HIDDEN LAYER ###
-            for hl_index in range(hidden_layer_size):
-                inputs_hl = []
-                _tmp = hl_index
-
-                for dimension_size in hidden_layer:
-                    _tmp, index = divmod(_tmp, dimension_size)
-                    inputs_hl.append(index)
-                ### HIDDEN LAYER ###
-
-                ### OUTPUT LAYER ###
-                for ol_index in range(output_layer_size):
-                    inputs_ol = []
-                    _tmp = ol_index
-
-                    for dimension_size in output_layer:
-                        _tmp, index = divmod(_tmp, dimension_size)
-                        inputs_ol.append(index)
-                    ### OUTPUT LAYER ###
-
-                    weights = cppn(
-                        [
-                            *inputs_fl,
-                            *inputs_hl,
-                            *inputs_ol,
-                        ]
-                    )
-
-                    self.first_layer_mat[
-                        hl_index,
-                        fl_index,
-                    ] = weights[0]
-
-                    self.hidden_layer_mat[
-                        ol_index,
-                        hl_index,
-                    ] = weights[1]
-
-    def forward(self, input: list[float]):
-        input = np.array(input, dtype=np.float32)
-        hidden_layer_input = self.first_layer_mat @ input
-        hidden_layer_output = self.activation_function(hidden_layer_input)
-        output = self.hidden_layer_mat @ hidden_layer_output
-        output = self.activation_function(output)
-        return output
+    def forward(self, input: list[list[float]]):
+        np_input = np.array(input, dtype=np.float32)  # type: ignore
+        tensor_input = torch.from_numpy(np_input)
+        result: torch.Tensor = self.net(tensor_input)
+        np_result = result.detach().numpy()
+        np_result = np_result.reshape(np.shape(input)[0], -1)
+        return np_result

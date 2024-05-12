@@ -6,8 +6,10 @@ import random
 import neat
 from fitness import calculate_fitness
 from fitness_hyper import calculate_fitness as calculate_fitness_hyper
+from fitness_optimized import calculate_fitness as calculate_fitness_optimized
 
-ENABLE_HYPER = False
+ENABLE_HYPER = True
+ENABLE_FITNESS_OPTIMIZED = False
 
 
 class CustomParallelEvaluator(neat.ParallelEvaluator):
@@ -39,13 +41,17 @@ def run(config_file):
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
 
+    if ENABLE_FITNESS_OPTIMIZED:
+        pe = CustomParallelEvaluator(
+            multiprocessing.cpu_count(), calculate_fitness_optimized
+        )
     if ENABLE_HYPER:
         pe = CustomParallelEvaluator(
             multiprocessing.cpu_count(), calculate_fitness_hyper
         )
     else:
         pe = CustomParallelEvaluator(multiprocessing.cpu_count(), calculate_fitness)
-    winner = p.run(pe.evaluate, 5000)
+    winner = p.run(pe.evaluate, 200)
 
     print("\nBest genome:\n{!s}".format(winner))
 
@@ -54,6 +60,8 @@ def run(config_file):
 
     with open("output_network.pkl", "wb") as f:
         pickle.dump(winner_net, f)
+
+    print("\nOutput network saved to output_network.pkl")
 
     stats.save()
 
